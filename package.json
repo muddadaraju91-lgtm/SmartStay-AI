@@ -1,0 +1,10 @@
+{
+  "name": "smartstay-ai-parent",
+  "version": "1.0.0",
+  "description": "Parent script mappings for running SmartStay AI frontend and backend",
+  "scripts": {
+    "db:init": "npm run db:init --prefix backend",
+    "backend": "npm run dev --prefix backend",
+    "frontend": "npm run dev --prefix frontend"
+  }
+}
