@@ -4,8 +4,8 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import AppLayout from './layouts/AppLayout';
 
 // Pages
-import Home from './pages/Home';
 import Login from './pages/Login';
+import Home from './pages/Home';
 import Register from './pages/Register';
 import SearchHostels from './pages/SearchHostels';
 import HostelDetails from './pages/HostelDetails';
