@@ -1,4 +1,5 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api').replace(/\/+$/, '');
+const API_BASE_URL = API_URL.endsWith('/api') ? API_URL : `${API_URL}/api`;
 
 // Set auth header helper
 export const getAuthHeaders = () => {
@@ -9,7 +10,7 @@ export const getAuthHeaders = () => {
 // Generic Fetch Request Helper
 export const apiRequest = async (endpoint, options = {}) => {
     try {
-        const url = `${API_URL}${endpoint}`;
+        const url = `${API_BASE_URL}${endpoint}`;
         const headers = {
             'Content-Type': 'application/json',
             ...getAuthHeaders(),
@@ -22,9 +23,13 @@ export const apiRequest = async (endpoint, options = {}) => {
             headers
         };
 
-        // If body is passed, stringify it
-        if (config.body && !(config.body instanceof FormData)) {
-            config.body = JSON.stringify(config.body);
+        // If body is passed, stringify it unless it is FormData
+        if (config.body) {
+            if (config.body instanceof FormData) {
+                delete config.headers['Content-Type'];
+            } else {
+                config.body = JSON.stringify(config.body);
+            }
         }
 
         // Axios emulation using native fetch to keep bundle light and clean
