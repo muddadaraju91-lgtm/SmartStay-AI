@@ -8,7 +8,7 @@ const hostelCache = require('../services/hostelCache');
 // @access  Public
 const getHostels = async (req, res, next) => {
     try {
-        const { search, collegeLat, collegeLng, maxDistance = 15, isVerified, minPrice, maxPrice, amenities, ownerId } = req.query;
+        const { search, collegeLat, collegeLng, maxDistance = 2, isVerified, minPrice, maxPrice, amenities, ownerId } = req.query;
         let query = `
             SELECT h.*, u.name as owner_name,
                    COALESCE((SELECT MIN(price) FROM rooms WHERE hostel_id = h.id), 0) as starting_price,
@@ -104,7 +104,11 @@ const getHostels = async (req, res, next) => {
         }
 
         // Ordering listings by trust score & distance
-        query += ` ORDER BY h.trust_score DESC, distance ASC`;
+        if (finalCollegeLat && finalCollegeLng) {
+            query += ` ORDER BY distance ASC, h.trust_score DESC`;
+        } else {
+            query += ` ORDER BY h.trust_score DESC`;
+        }
 
         const [hostels] = await pool.query(query, queryParams);
 
