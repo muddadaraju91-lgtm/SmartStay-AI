@@ -54,6 +54,7 @@ export default function Login() {
                             <input 
                                 type="email"
                                 required
+                                autoComplete="username"
                                 placeholder="student@college.edu"
                                 className="form-input pl-4"
                                 value={email}
@@ -71,6 +72,7 @@ export default function Login() {
                             <input 
                                 type="password"
                                 required
+                                autoComplete="current-password"
                                 placeholder="••••••••"
                                 className="form-input pl-4"
                                 value={password}

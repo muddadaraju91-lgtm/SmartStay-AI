@@ -1,6 +1,7 @@
 const pool = require('../config/db');
 const ApiResponse = require('../utils/apiResponse');
 const { calculateMatchScore } = require('../services/recommendationEngine');
+const hostelCache = require('../services/hostelCache');
 
 // @desc    Get all hostels (with distance and filters)
 // @route   GET /api/hostels
@@ -15,8 +16,23 @@ const getHostels = async (req, res, next) => {
         `;
         const queryParams = [];
 
+        // Check if the search term is a college name and we don't have explicit coords
+        let finalCollegeLat = collegeLat;
+        let finalCollegeLng = collegeLng;
+
+        if (search && !finalCollegeLat && !finalCollegeLng) {
+            const [colleges] = await pool.query(
+                'SELECT latitude, longitude FROM colleges WHERE name LIKE ? OR city LIKE ? LIMIT 1', 
+                [`%${search}%`, `%${search}%`]
+            );
+            if (colleges.length > 0) {
+                finalCollegeLat = colleges[0].latitude;
+                finalCollegeLng = colleges[0].longitude;
+            }
+        }
+
         // Geolocation calculations using Haversine Formula
-        if (collegeLat && collegeLng) {
+        if (finalCollegeLat && finalCollegeLng) {
             query += `, 
                 (6371 * acos(
                     cos(radians(?)) * cos(radians(h.latitude)) * 
@@ -24,7 +40,7 @@ const getHostels = async (req, res, next) => {
                     sin(radians(?)) * sin(radians(h.latitude))
                 )) AS distance
             `;
-            queryParams.push(parseFloat(collegeLat), parseFloat(collegeLng), parseFloat(collegeLat));
+            queryParams.push(parseFloat(finalCollegeLat), parseFloat(finalCollegeLng), parseFloat(finalCollegeLat));
         } else {
             query += `, 0 AS distance`;
         }
@@ -44,7 +60,9 @@ const getHostels = async (req, res, next) => {
         }
 
         // Apply search keyword filter (names or address keywords)
-        if (search) {
+        // Only apply if we are NOT doing a college location-based search, 
+        // because if finalCollegeLat is set, the search term was a college/city name.
+        if (search && !(finalCollegeLat && finalCollegeLng)) {
             query += ` AND (h.name LIKE ? OR h.address LIKE ?)`;
             const searchPattern = `%${search}%`;
             queryParams.push(searchPattern, searchPattern);
@@ -64,8 +82,24 @@ const getHostels = async (req, res, next) => {
             query += `)`;
         }
 
-        // Distance range filter
-        if (collegeLat && collegeLng && maxDistance) {
+        // Amenities filter — each requested amenity must appear in the stored JSON array.
+        // JSON_CONTAINS is applied once per term (AND logic = all must match), which
+        // replicates the previous JavaScript Array.every() behaviour exactly.
+        // Parameterizing via JSON.stringify(term) produces a valid JSON scalar (e.g. '"WiFi"'),
+        // so this is fully parameterized — no string concatenation at all.
+        // NOTE: JSON_CONTAINS on a VARCHAR column cannot use a B-tree index and will do a
+        // full scan for the amenity predicate — acceptable now, and the reason Option B
+        // (normalized join table) is recorded for a future migration.
+        if (amenities) {
+            const amenitiesList = amenities.split(',').map(a => a.trim()).filter(Boolean);
+            for (const amenity of amenitiesList) {
+                query += ` AND JSON_CONTAINS(CAST(h.amenities AS JSON), ?)`;
+                queryParams.push(JSON.stringify(amenity)); // e.g. '"WiFi"'
+            }
+        }
+
+        // Distance range filter (HAVING must come after all WHERE conditions)
+        if (finalCollegeLat && finalCollegeLng && maxDistance) {
             query += ` HAVING distance <= ?`;
             queryParams.push(parseFloat(maxDistance));
         }
@@ -82,17 +116,9 @@ const getHostels = async (req, res, next) => {
             is_verified: !!hostel.is_verified
         }));
 
-        // If filtering by specific amenities in query parameter (e.g. WiFi, Gym)
-        let filteredHostels = formattedHostels;
-        if (amenities) {
-            const amenitiesList = amenities.split(',').map(a => a.trim().toLowerCase());
-            filteredHostels = formattedHostels.filter(h => {
-                const hostelAmenities = (h.amenities || []).map(a => a.toLowerCase());
-                return amenitiesList.every(requiredAmenity => hostelAmenities.includes(requiredAmenity));
-            });
-        }
-
-        return ApiResponse.success(res, 'Hostels retrieved successfully', { hostels: filteredHostels });
+        // Amenities filtering is now handled in SQL (see WHERE clause above).
+        // No post-fetch JS filter needed.
+        return ApiResponse.success(res, 'Hostels retrieved successfully', { hostels: formattedHostels });
 
     } catch (err) {
         next(err);
@@ -177,6 +203,10 @@ const createHostel = async (req, res, next) => {
 
         const newHostelId = result.insertId;
 
+        // A new hostel means the verified set may change (e.g. after a quick admin verify).
+        // Invalidate eagerly so there is no stale-cache window.
+        hostelCache.invalidate();
+
         return ApiResponse.success(res, 'Hostel listing created successfully. Awaiting admin verification.', {
             hostelId: newHostelId
         }, 201);
@@ -227,6 +257,9 @@ const updateHostel = async (req, res, next) => {
 
         await pool.query(`UPDATE hostels SET ${updates.join(', ')} WHERE id = ?`, params);
 
+        // lat/lng, amenities, or trust_score changes affect recommendation scoring.
+        hostelCache.invalidate();
+
         return ApiResponse.success(res, 'Hostel listing updated successfully');
 
     } catch (err) {
@@ -252,6 +285,9 @@ const verifyHostel = async (req, res, next) => {
         const trustBonus = isVerified ? 30 : -30;
         await pool.query('UPDATE hostels SET trust_score = LEAST(100.00, GREATEST(0.00, trust_score + ?)) WHERE id = ?', [trustBonus, hostelId]);
 
+        // is_verified directly controls which hostels appear in recommendations.
+        hostelCache.invalidate();
+
         return ApiResponse.success(res, `Hostel verification status updated to: ${isVerified}`);
     } catch (err) {
         next(err);
@@ -276,6 +312,9 @@ const deleteHostel = async (req, res, next) => {
 
         await pool.query('DELETE FROM hostels WHERE id = ?', [hostelId]);
 
+        // Deleted hostel must not appear in future recommendations.
+        hostelCache.invalidate();
+
         return ApiResponse.success(res, 'Hostel listing deleted successfully');
 
     } catch (err) {
@@ -297,42 +336,114 @@ const getRecommendations = async (req, res, next) => {
         let refAmenities = amenities ? amenities.split(',').map(a => a.trim()) : [];
 
         if (!refLat || !refLng) {
-            // Default center coordinate if student coords not passed (e.g. Bangalore center)
-            refLat = 12.9716; 
-            refLng = 77.5946;
+            // IMPORTANT: Never silently fall back to a hardcoded city coordinate here.
+            // Every college seeded in this platform is in Visakhapatnam, Andhra Pradesh.
+            // A Bangalore (or any other city) default would silently compute distances
+            // against the wrong origin, producing recommendations that are geographically
+            // meaningless and misleading to the student. Instead we derive coordinates
+            // from the student's actual college association, or return an explicit error.
+
+            // Strategy 1: caller may supply an explicit collegeId query param
+            const explicitCollegeId = req.query.collegeId ? parseInt(req.query.collegeId) : null;
+
+            let resolvedCollegeId = explicitCollegeId;
+
+            // Strategy 2: look up the college_id stored on the student's own profile row
+            if (!resolvedCollegeId) {
+                const [profileRows] = await pool.query(
+                    'SELECT college_id FROM users WHERE id = ?',
+                    [studentId]
+                );
+                if (profileRows.length > 0 && profileRows[0].college_id) {
+                    resolvedCollegeId = profileRows[0].college_id;
+                }
+            }
+
+            // Strategy 3: if we have a college ID, fetch its coordinates from the colleges table
+            if (resolvedCollegeId) {
+                const [collegeRows] = await pool.query(
+                    'SELECT latitude, longitude FROM colleges WHERE id = ?',
+                    [resolvedCollegeId]
+                );
+                if (collegeRows.length > 0) {
+                    refLat = parseFloat(collegeRows[0].latitude);
+                    refLng = parseFloat(collegeRows[0].longitude);
+                }
+            }
+
+            // If coordinates are still unresolved, refuse to guess — return a clear error
+            if (!refLat || !refLng) {
+                return ApiResponse.error(
+                    res,
+                    'Unable to determine your location. Please provide latitude & longitude query parameters, or a valid collegeId.',
+                    400
+                );
+            }
         }
 
-        const query = `
-            SELECT h.*, u.name as owner_name,
-                   COALESCE((SELECT MIN(price) FROM rooms WHERE hostel_id = h.id), 0) as starting_price
-            FROM hostels h
-            JOIN users u ON h.owner_id = u.id
-            WHERE h.is_verified = 1
-        `;
+        // ── SQL candidate pre-filter using Haversine ──────────────────────────
+        // Before scoring every verified hostel in JS, push a coarse distance filter
+        // into the SQL query so only hostels within MAX_CANDIDATE_KM reach the
+        // Node.js layer. This mirrors the existing Haversine pattern used in
+        // getHostels() and turns an O(n-all) scan into O(n-nearby).
+        //
+        // MAX_CANDIDATE_KM is intentionally generous (default 25 km) — the JS scorer
+        // filters further with its matchScore > 20 threshold and the top-6 slice.
+        const MAX_CANDIDATE_KM = parseFloat(process.env.RECOMMENDATION_CANDIDATE_KM || '25');
 
-        const [hostels] = await pool.query(query);
+        // ── Cache read ────────────────────────────────────────────────────────
+        // The base SQL includes distance so it IS coordinate-specific; we therefore
+        // store the pre-filtered candidate rows keyed by a rounded coordinate pair
+        // to allow cache reuse for nearby requests (within 0.01° ≈ ~1 km).
+        // For simplicity we round to 2 decimal places — good enough for a 25 km bucket.
+        const cacheKey = `${refLat.toFixed(2)}_${refLng.toFixed(2)}`;
+        let candidates = hostelCache.get(cacheKey);
 
-        const recommendations = hostels.map(hostel => {
-            const lat1 = refLat;
-            const lon1 = refLng;
-            const lat2 = parseFloat(hostel.latitude);
-            const lon2 = parseFloat(hostel.longitude);
+        if (!candidates) {
+            // Cache miss: run the SQL query with Haversine distance pre-filter
+            const candidateQuery = `
+                SELECT h.*, u.name as owner_name,
+                       COALESCE((SELECT MIN(price) FROM rooms WHERE hostel_id = h.id), 0) as starting_price,
+                       (6371 * acos(
+                           cos(radians(?)) * cos(radians(h.latitude)) *
+                           cos(radians(h.longitude) - radians(?)) +
+                           sin(radians(?)) * sin(radians(h.latitude))
+                       )) AS distance_km
+                FROM hostels h
+                JOIN users u ON h.owner_id = u.id
+                WHERE h.is_verified = 1
+                HAVING distance_km <= ?
+                ORDER BY distance_km ASC
+            `;
 
-            const R = 6371; // km
-            const dLat = (lat2 - lat1) * Math.PI / 180;
-            const dLon = (lon2 - lon1) * Math.PI / 180;
-            const a = 
-                Math.sin(dLat/2) * Math.sin(dLat/2) +
-                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
-                Math.sin(dLon/2) * Math.sin(dLon/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            const distance = R * c;
+            const [rows] = await pool.query(candidateQuery, [refLat, refLng, refLat, MAX_CANDIDATE_KM]);
+            candidates = rows;
+            hostelCache.set(cacheKey, candidates);
+        }
 
-            const matchScore = calculateMatchScore(hostel, preferredBudget, distance, refAmenities);
+        // ── JS scoring over the (much smaller) candidate set ──────────────────
+        const recommendations = candidates.map(hostel => {
+            // distance_km was computed by SQL; parse it for the scorer
+            const distance = parseFloat(hostel.distance_km);
+
+            const matchScore = calculateMatchScore(
+                {
+                    ...hostel,
+                    // Pre-parse amenities once here so calculateMatchScore receives an array
+                    amenities: typeof hostel.amenities === 'string'
+                        ? JSON.parse(hostel.amenities)
+                        : (hostel.amenities || [])
+                },
+                preferredBudget,
+                distance,
+                refAmenities
+            );
 
             return {
                 ...hostel,
-                amenities: typeof hostel.amenities === 'string' ? JSON.parse(hostel.amenities) : hostel.amenities,
+                amenities: typeof hostel.amenities === 'string'
+                    ? JSON.parse(hostel.amenities)
+                    : hostel.amenities,
                 distance: parseFloat(distance.toFixed(2)),
                 matchScore
             };

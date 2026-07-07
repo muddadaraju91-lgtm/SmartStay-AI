@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ToastProvider } from './context/ToastContext';
 import AppLayout from './layouts/AppLayout';
 
 // Pages
@@ -37,7 +38,8 @@ const RoleRoute = ({ children, allowedRoles }) => {
 export default function App() {
     return (
         <AuthProvider>
-            <Router>
+            <ToastProvider>
+            <Router future={{ v7_relativeSplatPath: true }}>
                 <AppLayout>
                     <Routes>
                         {/* Public Views */}
@@ -88,6 +90,7 @@ export default function App() {
                     </Routes>
                 </AppLayout>
             </Router>
+            </ToastProvider>
         </AuthProvider>
     );
 }

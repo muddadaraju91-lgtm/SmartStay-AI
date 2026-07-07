@@ -3,12 +3,16 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { hostelService } from '../services/api';
 import { Search, Compass, ShieldCheck, Sparkles, AlertCircle, MapPin, BadgePercent, Star } from 'lucide-react';
+import CollegeSearchAutocomplete from '../components/CollegeSearchAutocomplete';
 
 export default function Home() {
     const { isAuthenticated, isStudent, user } = useAuth();
     const [recommendations, setRecommendations] = useState([]);
     const [loading, setLoading] = useState(false);
+    
+    // Search state
     const [searchQuery, setSearchQuery] = useState('');
+    const [selectedCollege, setSelectedCollege] = useState(null);
 
     useEffect(() => {
         if (isAuthenticated && isStudent) {
@@ -68,19 +72,23 @@ export default function Home() {
 
                     {/* Search Bar Redirect */}
                     <div className="max-w-xl mx-auto pt-4 flex flex-col sm:flex-row items-center gap-3">
-                        <div className="relative w-full">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 w-5 h-5" />
-                            <input 
-                                type="text"
-                                placeholder="Enter college name or city area..."
-                                className="form-input pl-12 py-3.5 text-sm glass-panel focus:ring-brand-500"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                            />
-                        </div>
+                        <CollegeSearchAutocomplete 
+                            className="py-3.5 glass-panel focus:ring-brand-500"
+                            onChange={(text) => {
+                                setSearchQuery(text);
+                                setSelectedCollege(null);
+                            }}
+                            onSelect={(college) => {
+                                setSearchQuery(college.name);
+                                setSelectedCollege(college);
+                            }}
+                        />
                         <Link 
-                            to={`/search?search=${encodeURIComponent(searchQuery)}`}
-                            className="btn-primary w-full sm:w-auto py-3.5 px-6 whitespace-nowrap text-sm"
+                            to={selectedCollege 
+                                ? `/search?search=${encodeURIComponent(selectedCollege.name)}&collegeLat=${selectedCollege.latitude}&collegeLng=${selectedCollege.longitude}` 
+                                : `/search?search=${encodeURIComponent(searchQuery)}`
+                            }
+                            className="btn-primary w-full sm:w-auto py-3.5 px-6 whitespace-nowrap text-sm h-[52px] flex items-center justify-center"
                         >
                             <Compass className="w-4 h-4" />
                             Explore Stays

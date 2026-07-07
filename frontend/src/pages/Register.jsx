@@ -83,6 +83,7 @@ export default function Register() {
                             <input 
                                 type="text"
                                 required
+                                autoComplete="name"
                                 placeholder="Rahul Kumar"
                                 className="form-input pl-4"
                                 value={name}
@@ -98,6 +99,7 @@ export default function Register() {
                             <input 
                                 type="email"
                                 required
+                                autoComplete="email"
                                 placeholder="rahul@university.edu"
                                 className="form-input pl-4"
                                 value={email}
@@ -113,6 +115,7 @@ export default function Register() {
                             <input 
                                 type="tel"
                                 required
+                                autoComplete="tel"
                                 placeholder="9876543210"
                                 className="form-input pl-4"
                                 value={phone}
@@ -128,6 +131,7 @@ export default function Register() {
                             <input 
                                 type="password"
                                 required
+                                autoComplete="new-password"
                                 placeholder="Minimum 6 characters"
                                 className="form-input pl-4"
                                 value={password}
@@ -143,6 +147,7 @@ export default function Register() {
                             <input 
                                 type="password"
                                 required
+                                autoComplete="new-password"
                                 placeholder="Confirm your password"
                                 className="form-input pl-4"
                                 value={confirmPassword}

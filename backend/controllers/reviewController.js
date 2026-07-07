@@ -2,6 +2,18 @@ const pool = require('../config/db');
 const ApiResponse = require('../utils/apiResponse');
 const { recalculateTrustScore } = require('../services/trustScoreEngine');
 
+// Shared error handler for the non-blocking trust score recalculation.
+// Kept at module level so it appears with a clear name in stack traces.
+// Non-blocking: the caller's response has already been sent before this fires.
+function onTrustScoreError(hostelId, err) {
+    console.error(
+        '[trustScore] Recalculation failed for hostelId=%d — %s',
+        hostelId,
+        err.message,
+        err.stack ? '\n' + err.stack : ''
+    );
+}
+
 // @desc    Add review for a hostel property
 // @route   POST /api/reviews
 // @access  Private (Student Only)
@@ -37,8 +49,12 @@ const addReview = async (req, res, next) => {
             [studentId, hostelId, numericRating, comment || '', isVerifiedBooking]
         );
 
-        // Recalculate Trust Score asynchronously
-        recalculateTrustScore(hostelId);
+        // Fire-and-forget: recalculate trust score without blocking the response.
+        // The .catch() ensures any rejection (including errors that escape the
+        // engine's own try/catch, e.g. a synchronous throw before the first await)
+        // produces a visible log entry rather than an unhandled promise rejection.
+        recalculateTrustScore(hostelId)
+            .catch(err => onTrustScoreError(hostelId, err));
 
         return ApiResponse.success(res, 'Review added successfully', { isVerifiedBooking }, 201);
 
@@ -108,8 +124,9 @@ const deleteReview = async (req, res, next) => {
 
         await pool.query('DELETE FROM reviews WHERE id = ?', [reviewId]);
 
-        // Recalculate Trust Score asynchronously
-        recalculateTrustScore(review.hostel_id);
+        // Fire-and-forget: same pattern as addReview — non-blocking with explicit catch.
+        recalculateTrustScore(review.hostel_id)
+            .catch(err => onTrustScoreError(review.hostel_id, err));
 
         return ApiResponse.success(res, 'Review deleted successfully');
 

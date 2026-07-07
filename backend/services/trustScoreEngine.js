@@ -1,4 +1,5 @@
 const pool = require('../config/db');
+const hostelCache = require('./hostelCache');
 
 /**
  * Dynamically computes and updates the Trust Score (0-100) of a hostel property.
@@ -49,10 +50,16 @@ const recalculateTrustScore = async (hostelId) => {
 
         // 5. Update Trust Score in database
         await pool.query('UPDATE hostels SET trust_score = ? WHERE id = ?', [trustScore, hostelId]);
-        console.log(`Recalculated Trust Score for Hostel ID ${hostelId}: ${trustScore}%`);
+        // Bust the recommendation cache so the updated score is reflected immediately.
+        hostelCache.invalidate();
+        console.log('[trustScore] hostelId=%d updated to %d%%', hostelId, trustScore);
 
     } catch (err) {
-        console.error('Error recalculating trust score:', err.message);
+        // Re-throw so the .catch() at the call site can log hostelId in context.
+        // Also log here as a secondary safety net (e.g. if called without .catch()).
+        console.error('[trustScore] Engine error for hostelId=%d — %s\n%s',
+            hostelId, err.message, err.stack || '');
+        throw err;
     }
 };
 

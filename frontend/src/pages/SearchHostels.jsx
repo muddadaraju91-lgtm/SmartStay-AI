@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { hostelService } from '../services/api';
 import { Search, MapPin, ShieldAlert, Sparkles, Filter, CheckSquare, Square, X, Compass, Star } from 'lucide-react';
+import CollegeSearchAutocomplete from '../components/CollegeSearchAutocomplete';
 
 export default function SearchHostels() {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -12,8 +13,10 @@ export default function SearchHostels() {
     
     // Filters State
     const [search, setSearch] = useState(urlQuery);
+    const [collegeLat, setCollegeLat] = useState(searchParams.get('collegeLat') || '');
+    const [collegeLng, setCollegeLng] = useState(searchParams.get('collegeLng') || '');
     const [minPrice, setMinPrice] = useState('5000');
-const [maxPrice, setMaxPrice] = useState('10000');
+    const [maxPrice, setMaxPrice] = useState('10000');
     const [isVerified, setIsVerified] = useState(false);
     const [selectedAmenities, setSelectedAmenities] = useState([]);
 
@@ -28,6 +31,8 @@ const [maxPrice, setMaxPrice] = useState('10000');
         try {
             const params = {
                 search: searchParams.get('search') || '',
+                collegeLat: searchParams.get('collegeLat') || '',
+                collegeLng: searchParams.get('collegeLng') || '',
                 minPrice: searchParams.get('minPrice') || '',
                 maxPrice: searchParams.get('maxPrice') || '',
                 isVerified: searchParams.get('isVerified') || '',
@@ -46,6 +51,8 @@ const [maxPrice, setMaxPrice] = useState('10000');
         if (e) e.preventDefault();
         const params = {};
         if (search) params.search = search;
+        if (collegeLat) params.collegeLat = collegeLat;
+        if (collegeLng) params.collegeLng = collegeLng;
         if (minPrice) params.minPrice = minPrice;
         if (maxPrice) params.maxPrice = maxPrice;
         if (isVerified) params.isVerified = 'true';
@@ -56,6 +63,8 @@ const [maxPrice, setMaxPrice] = useState('10000');
 
     const handleResetFilters = () => {
         setSearch('');
+        setCollegeLat('');
+        setCollegeLng('');
         setMinPrice('');
         setMaxPrice('');
         setIsVerified(false);
@@ -93,12 +102,18 @@ const [maxPrice, setMaxPrice] = useState('10000');
                     {/* Keyword Search */}
                     <div className="space-y-2">
                         <label className="text-xs font-semibold text-slate-400">Search Location</label>
-                        <input 
-                            type="text" 
-                            placeholder="College, City area..."
-                            className="form-input text-sm"
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
+                        <CollegeSearchAutocomplete 
+                            initialValue={search}
+                            onChange={(text) => {
+                                setSearch(text);
+                                setCollegeLat('');
+                                setCollegeLng('');
+                            }}
+                            onSelect={(college) => {
+                                setSearch(college.name);
+                                setCollegeLat(college.latitude);
+                                setCollegeLng(college.longitude);
+                            }}
                         />
                     </div>
 

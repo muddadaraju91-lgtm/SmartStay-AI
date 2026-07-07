@@ -2,12 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { hostelService, bookingService, reviewService } from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { MapPin, Compass, Phone, Sparkles, Star, Calendar, CreditCard, ShieldAlert, CheckCircle, Loader2 } from 'lucide-react';
 
 export default function HostelDetails() {
     const { id } = useParams();
     const navigate = useNavigate();
     const { isAuthenticated, isStudent } = useAuth();
+    const toast = useToast();
 
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -58,7 +60,7 @@ export default function HostelDetails() {
             setBookingId(res.data.bookingId);
             setBookingSuccess(true);
         } catch (err) {
-            alert(err.message || 'Booking request failed');
+            toast.error(err.message || 'Booking request failed');
         } finally {
             setBookingLoading(false);
         }

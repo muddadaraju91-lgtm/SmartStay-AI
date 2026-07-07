@@ -8,6 +8,11 @@ CREATE TABLE IF NOT EXISTS users (
     password VARCHAR(255) NOT NULL,
     role ENUM('student', 'owner', 'admin') NOT NULL,
     phone VARCHAR(15) NOT NULL,
+    -- college_id links student accounts to their enrolled institution.
+    -- Populated during registration or profile update; used by the recommendations
+    -- endpoint to derive a geographic origin when no lat/lng is supplied by the client.
+    -- NULL for owner/admin accounts and students who have not set their college yet.
+    college_id INT DEFAULT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_user_email (email)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -149,3 +154,5 @@ VALUES
 ('GVP Degree College','Visakhapatnam','Andhra Pradesh',17.7480,83.3370),
 ('Andhra University College of Engineering','Visakhapatnam','Andhra Pradesh',17.7290,83.3170),
 ('SIMS College','Visakhapatnam','Andhra Pradesh',17.7600,83.3200);
+
+-- Foreign-key constraint is handled in init_db.js safely.

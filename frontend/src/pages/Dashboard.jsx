@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import { analyticsService, bookingService, hostelService } from '../services/api';
 import { LayoutDashboard, PlusCircle, CheckCircle, XCircle, Users, Hotel, TrendingUp, HelpCircle, ShieldCheck, Loader2 } from 'lucide-react';
 
 export default function Dashboard() {
     const { isOwner, isAdmin } = useAuth();
+    const toast = useToast();
     const [metrics, setMetrics] = useState(null);
     const [loading, setLoading] = useState(true);
 
@@ -28,20 +30,20 @@ export default function Dashboard() {
     const handleUpdateBookingStatus = async (bookingId, newStatus) => {
         try {
             await bookingService.updateStatus(bookingId, newStatus);
-            alert(`Booking has been: ${newStatus}`);
+            toast.success(`Booking has been: ${newStatus}`);
             fetchDashboardData();
         } catch (err) {
-            alert(err.message || 'Action execution failed');
+            toast.error(err.message || 'Action execution failed');
         }
     };
 
     const handleVerifyHostel = async (hostelId, status) => {
         try {
             await hostelService.verify(hostelId, status);
-            alert(`Property listing verification updated to: ${status}`);
+            toast.success(`Property listing verification updated to: ${status}`);
             fetchDashboardData();
         } catch (err) {
-            alert(err.message || 'Verification failed');
+            toast.error(err.message || 'Verification failed');
         }
     };
 

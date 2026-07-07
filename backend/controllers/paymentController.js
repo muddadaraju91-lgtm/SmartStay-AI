@@ -118,37 +118,45 @@ const verifyPayment = async (req, res, next) => {
         }
 
         if (!signatureIsValid) {
-            // Log payment failure entry
-            await pool.query(
-                `INSERT INTO payments (booking_id, razorpay_payment_id, amount, status) 
-                 VALUES (?, ?, ?, 'failed')`,
-                [bookingId, razorpay_payment_id || null, booking.total_amount]
-            );
-            await pool.query('UPDATE bookings SET status = ? WHERE id = ?', ['cancelled', bookingId]);
+            // Signature invalid — release the slot that was reserved at booking-create time.
+            // Wrapped in its own transaction so the restore and the status change are atomic.
+            let failConn;
+            try {
+                failConn = await pool.getConnection();
+                await failConn.beginTransaction();
+
+                await failConn.query(
+                    'SELECT vacant_rooms FROM rooms WHERE id = ? FOR UPDATE',
+                    [booking.room_id]
+                );
+                await failConn.query(
+                    'UPDATE rooms SET vacant_rooms = vacant_rooms + 1 WHERE id = ?',
+                    [booking.room_id]
+                );
+                await failConn.query(
+                    `INSERT INTO payments (booking_id, razorpay_payment_id, amount, status)
+                     VALUES (?, ?, ?, 'failed')`,
+                    [bookingId, razorpay_payment_id || null, booking.total_amount]
+                );
+                await failConn.query(
+                    "UPDATE bookings SET status = 'cancelled' WHERE id = ?",
+                    [bookingId]
+                );
+                await failConn.commit();
+            } catch (rollbackErr) {
+                if (failConn) await failConn.rollback();
+                console.error('Error rolling back failed payment slot:', rollbackErr.message);
+            } finally {
+                if (failConn) failConn.release();
+            }
+
             return ApiResponse.error(res, 'Razorpay Payment signature verification failed', 400);
         }
 
-        // Update database transaction to reserve the inventory and set paid status
+        // The slot was already decremented at booking-create time (optimistic reserve).
+        // This transaction only needs to advance the booking state and record the payment.
         connection = await pool.getConnection();
         await connection.beginTransaction();
-
-        // Lock room record and decrease availability
-        const [roomRows] = await connection.query(
-            'SELECT vacant_rooms FROM rooms WHERE id = ? FOR UPDATE',
-            [booking.room_id]
-        );
-
-        if (roomRows[0].vacant_rooms <= 0) {
-            await connection.rollback();
-            connection.release();
-            return ApiResponse.error(res, 'Payment failed: The room is no longer available.', 400);
-        }
-
-        // Decrement vacancies
-        await connection.query(
-            'UPDATE rooms SET vacant_rooms = vacant_rooms - 1 WHERE id = ?',
-            [booking.room_id]
-        );
 
         // Update booking state
         await connection.query(

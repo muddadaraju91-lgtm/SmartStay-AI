@@ -30,9 +30,9 @@ export default function Footer() {
                     <div>
                         <h4 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">Support</h4>
                         <ul className="space-y-2 text-sm">
-                            <li className="flex items-center gap-2"><Mail className="w-4 h-4 text-brand-400" /> support@smartstay.ai</li>
-                            <li className="flex items-center gap-2"><Phone className="w-4 h-4 text-brand-400" /> +91 98765 43210</li>
-                            <li className="flex items-center gap-2"><MapPin className="w-4 h-4 text-brand-400" /> Bengaluru, India</li>
+                            <li className="flex items-center gap-2"><Mail className="w-4 h-4 text-brand-400" /> muddadaraju91@gmaill.com</li>
+                            <li className="flex items-center gap-2"><Phone className="w-4 h-4 text-brand-400" /> +91 93981 45732</li>
+                            <li className="flex items-center gap-2"><MapPin className="w-4 h-4 text-brand-400" /> Vizinagaram, India</li>
                         </ul>
                     </div>
 
@@ -40,8 +40,8 @@ export default function Footer() {
                     <div>
                         <h4 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">Developers Connect</h4>
                         <div className="flex space-x-4">
-                            <a href="#" className="p-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg transition-all"><Github className="w-4 h-4" /></a>
-                            <a href="#" className="p-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg transition-all"><Linkedin className="w-4 h-4" /></a>
+                            <a href="https://github.com/muddadaraju91-lgtm" target="_blank" rel="noopener noreferrer" className="p-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg transition-all"><Github className="w-4 h-4" /></a>
+                            <a href="https://www.linkedin.com/feed/" target="_blank" rel="noopener noreferrer" className="p-2 bg-slate-900 hover:bg-slate-800 text-white rounded-lg transition-all"><Linkedin className="w-4 h-4" /></a>
                         </div>
                     </div>
                 </div>

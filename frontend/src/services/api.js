@@ -32,7 +32,7 @@ export const apiRequest = async (endpoint, options = {}) => {
             }
         }
 
-        // Axios emulation using native fetch to keep bundle light and clean
+        // Native fetch: no third-party HTTP library is used in this client
         const response = await fetch(url, config);
         const json = await response.json();
 
@@ -41,7 +41,7 @@ export const apiRequest = async (endpoint, options = {}) => {
             if (response.status === 401) {
                 localStorage.removeItem('token');
                 localStorage.removeItem('user');
-                // Optional: window.location.href = '/login';
+                window.location.href = '/login';
             }
             throw new Error(json.message || 'Something went wrong');
         }
@@ -102,4 +102,8 @@ export const reviewService = {
 
 export const analyticsService = {
     getDashboard: () => apiRequest('/analytics/dashboard')
+};
+
+export const collegeService = {
+    search: (query) => apiRequest(`/colleges/search?q=${encodeURIComponent(query)}`)
 };

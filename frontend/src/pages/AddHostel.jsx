@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { hostelService } from '../services/api';
+import { useToast } from '../context/ToastContext';
 import { Hotel, MapPin, Compass, Sparkles, Loader2 } from 'lucide-react';
 
 export default function AddHostel() {
     const navigate = useNavigate();
+    const toast = useToast();
 
     const [name, setName] = useState('');
     const [address, setAddress] = useState('');
@@ -40,7 +42,7 @@ export default function AddHostel() {
                 description,
                 amenities: selectedAmenities
             });
-            alert('Hostel registered successfully! Awaiting verification.');
+            toast.success('Hostel registered successfully! Awaiting verification.');
             navigate('/dashboard');
         } catch (err) {
             setError(err.message || 'Property registration failed');

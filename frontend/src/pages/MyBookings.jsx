@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { bookingService, paymentService } from '../services/api';
+import { useToast } from '../context/ToastContext';
 import { Calendar, CreditCard, ShieldAlert, CheckCircle2, RefreshCw, HelpCircle, Loader2 } from 'lucide-react';
 
 export default function MyBookings() {
     const [bookings, setBookings] = useState([]);
     const [loading, setLoading] = useState(true);
     const [paymentLoading, setPaymentLoading] = useState(null); // Tracks booking ID being paid
+    const toast = useToast();
 
     useEffect(() => {
         fetchBookings();
@@ -32,13 +34,13 @@ export default function MyBookings() {
 
             if (orderData.isMock) {
                 // Bypass Razorpay Checkout UI and invoke mock payment verification immediately
-                alert('Mock payment mode: Simulating checkout transaction verification.');
+                toast.info('Mock payment mode: Simulating checkout transaction verification.');
                 await paymentService.verifyPayment({
                     bookingId: booking.id,
                     razorpay_order_id: orderData.order_id,
                     isMock: true
                 });
-                alert('Payment Confirmed!');
+                toast.success('Payment Confirmed!');
                 fetchBookings();
                 return;
             }
@@ -59,10 +61,10 @@ export default function MyBookings() {
                             razorpay_payment_id: response.razorpay_payment_id,
                             razorpay_signature: response.razorpay_signature
                         });
-                        alert('Payment processed successfully. Booking confirmed!');
+                        toast.success('Payment processed successfully. Booking confirmed!');
                         fetchBookings();
                     } catch (err) {
-                        alert(err.message || 'Signature verification failed');
+                        toast.error(err.message || 'Signature verification failed');
                     }
                 },
                 theme: {
@@ -74,7 +76,7 @@ export default function MyBookings() {
             rzp.open();
 
         } catch (err) {
-            alert(err.message || 'Payment failed to initialize');
+            toast.error(err.message || 'Payment failed to initialize');
         } finally {
             setPaymentLoading(null);
         }
