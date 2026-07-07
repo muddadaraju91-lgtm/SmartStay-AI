@@ -54,9 +54,8 @@ const getHostels = async (req, res, next) => {
         }
 
         // Apply verification status filter
-        if (isVerified !== undefined) {
-            query += ` AND h.is_verified = ?`;
-            queryParams.push(isVerified === 'true' ? 1 : 0);
+        if (isVerified === 'true') {
+            query += ` AND h.is_verified = 1`;
         }
 
         // Apply search keyword filter (names or address keywords)
